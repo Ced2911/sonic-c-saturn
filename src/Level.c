@@ -519,7 +519,7 @@ uint8_t continues;
 uint32_t score_life;
 
 uint16_t air;
-uint8_t last_special;
+// uint8_t last_special;
 
 uint8_t life_num;
 uint8_t life_count;

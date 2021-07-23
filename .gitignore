@@ -1,6 +1,7 @@
 # Exclude build directories
 /build/
 /bin/
+/pc/
 
 # Exclude converted resources
 /src/Resource/
