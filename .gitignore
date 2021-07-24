@@ -2,6 +2,7 @@
 /build/
 /bin/
 /pc/
+/saturn/build/
 
 # Exclude converted resources
 /src/Resource/

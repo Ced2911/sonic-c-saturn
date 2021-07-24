@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/sbin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
+            "name": "yaul",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/tool-chains/sh2eb-elf/sh2eb-elf/include/",
+                "/opt/tool-chains/sh2eb-elf/sh2eb-elf/include/yaul/",
+                "/opt/tool-chains/sh2eb-elf/sh2eb-elf/include/yaul/**"
+            ],
+            "defines": ["FENRIR_LOADER"],
+            "compilerPath": "/opt/tool-chains/sh2eb-elf/bin/sh2eb-elf-gcc",
+            "compilerArgs": ["-ffreestanding", "-m2", "-mb"],
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/saturn/compile_commands.json"
+        }
+    ],
+    "version": 4
+}
