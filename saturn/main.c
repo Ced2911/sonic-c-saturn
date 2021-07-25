@@ -15,18 +15,22 @@ static vdp2_scrn_cell_format_t format;
 //
 void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t height)
 {
+    //return;
+    // VRAM_BG
+    if ((offset & 0xE000) == 0xE000)
+    {
+        //return;
+    }
+    // VRAM_FG
+    if ((offset & 0xC000) == 0xC000)
+    {
+        //return;
+    }
     uint32_t page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(&format);
     uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format);
     uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format);
 
-    uint16_t *planes[4];
-    planes[0] = (uint16_t *)format.map_bases.plane_a;
-
-    uint16_t *a_pages[4];
-    a_pages[0] = &planes[0][0];
-
-    uint16_t num;
-    num = 0;
+    uint16_t *pages = (uint16_t *)format.map_bases.plane_a;
 
     uint32_t page_x;
     uint32_t page_y;
@@ -39,19 +43,22 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             // https://segaretro.org/Sega_Mega_Drive/Planes
 
             uint16_t v = *((uint16_t *)tilemap);
-            uint16_t page_idx;
-            page_idx = page_x + (page_width * page_y);
+            uint16_t page_idx = page_x + (page_width * page_y);
 
-            uint16_t pnd;
-            pnd = VDP2_SCRN_PND_CONFIG_2(1, (uint32_t)format.cp_table,
-                                         (uint32_t)format.color_palette, v & 12, v & 11);
+            uint16_t tile_index = v & 0x7FF;
+            uint32_t pal = (uint32_t)(format.color_palette) + ((v >> 13) & 0x3);
 
-            a_pages[0][page_idx] = pnd | (v & 0x3FFF);
+            uint32_t cpd = (uint32_t)(format.cp_table) + (tile_index << 5);
+
+            uint8_t y_flip = (v & 0x1000) != 0;
+            uint8_t x_flip = (v & 0x0800) != 0;
+
+            uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd, pal, y_flip, x_flip);
+
+            pages[page_idx] = pnd;
 
             tilemap += 2;
         }
-
-        num ^= 1;
     }
 }
 
@@ -61,19 +68,18 @@ void VDP_SetPlaneBLocation(size_t loc) {}
 
 void VDP_SeekCRAM(size_t offset) {}
 
-void VDP_SetBackgroundColour(uint8_t index) {}
-
-void ClearScreen() {}
-
-size_t vram_offset = 0;
-
-void VDP_SeekVRAM(size_t offset)
+static uint8_t background_color_idx = 0;
+void VDP_SetBackgroundColour(uint8_t index)
 {
-    vram_offset = offset;
+    background_color_idx = index;
 }
 
-static void
-_copy_character_pattern_data(const vdp2_scrn_cell_format_t *format)
+void ClearScreen()
+{
+}
+
+// Debug...
+static void _copy_character_pattern_data(const vdp2_scrn_cell_format_t *format)
 {
     uint8_t *cpd;
     cpd = (uint8_t *)format->cp_table;
@@ -84,24 +90,22 @@ _copy_character_pattern_data(const vdp2_scrn_cell_format_t *format)
     }
 }
 
-static void
-_copy_color_palette(const vdp2_scrn_cell_format_t *format)
+static void _copy_color_palette(const vdp2_scrn_cell_format_t *format)
 {
     uint16_t *color_palette;
     color_palette = (uint16_t *)format->color_palette;
 
-    for (int i = 0; i < 96; i++)
+    for (int i = 0; i < 512; i++)
     {
         int idx = i;
-        int r = (((i + 10) % 32) * 8) & 0xFF;
-        int g = (((i + 20) % 32) * 8) & 0xFF;
-        int b = (((i + 0) % 32) * 8) & 0xFF;
-        color_palette[0] = COLOR_RGB_DATA | COLOR_RGB888_TO_RGB555(r, g, b);
+        uint32_t b = (i + 0) & 31;
+        uint32_t r = (i + 10) & 31;
+        uint32_t g = (i + 20) & 31;
+        color_palette[i] = COLOR_RGB_DATA | COLOR_RGB888_TO_RGB555(r * 8, g * 8, b * 8);
     }
 }
 
-static void
-_copy_map(const vdp2_scrn_cell_format_t *format)
+static void _copy_map(const vdp2_scrn_cell_format_t *format)
 {
     uint32_t page_width;
     page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(format);
@@ -135,36 +139,85 @@ _copy_map(const vdp2_scrn_cell_format_t *format)
             page_idx = page_x + (page_width * page_y);
 
             uint16_t pnd;
-            pnd = VDP2_SCRN_PND_CONFIG_1(1, (uint32_t)format->cp_table,
-                                         (uint32_t)format->color_palette);
+            pnd = VDP2_SCRN_PND_CONFIG_4(1, (uint32_t)format->cp_table,
+                                         (uint32_t)format->color_palette, 0, 0);
 
-            a_pages[0][page_idx] = pnd | num;
+            a_pages[0][page_idx] = pnd | (num << 1);
 
-            num ^= 1;
+            num++;
         }
-
-        num ^= 1;
     }
+}
+
+size_t vram_offset = 0;
+
+void VDP_SeekVRAM(size_t offset)
+{
+    vram_offset = offset;
 }
 
 void VDP_WriteVRAM(const uint8_t *data, size_t len)
 {
+    // return;
     // Pattern data
     if (1 && vram_offset < 0xC000)
     {
-        vram_offset += len;
+#if 0
+        // 4bpp=>8bpp
+        uint8_t *cpd = (uint8_t *)format.cp_table + (vram_offset * 2);
 
-        uint8_t *cpd = (uint8_t *)format.cp_table;
-        for (int i = 0; i < len; i++)
+        for (size_t i = 0; i < len; i++)
         {
+            uint8_t px = *data++;
+            *cpd++ = (px >> 4) & 0xF;
+            *cpd++ = px & 0xF;
+        }
+#else
+        uint8_t *cpd = (uint8_t *)format.cp_table + (vram_offset);
 
-            // memcpy(cpd + vram_offset, data, len);
+        for (size_t i = 0; i < len; i++)
+        {
+            *cpd++ = *data++;
+        }
+#endif
+    }
+    vram_offset += len;
+}
+
+static void sync_palettes()
+{
+    extern uint16_t dry_palette[4][16];
+    // sync palette
+    uint16_t *color_palette = (uint16_t *)format.color_palette;
+    // *color_palette++ = COLOR_RGB_DATA | COLOR_RGB888_TO_RGB555(0, 0, 255);
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 16; j++)
+        {
+            // https://segaretro.org/Sega_Mega_Drive/Palettes_and_CRAM
+            static const uint8_t col_level[] = {0, 6, 10, 14, 18, 21, 25, 31};
+            uint16_t cv = dry_palette[i][j];
+            uint8_t r = (cv & 0x00E) >> 1;
+            uint8_t g = (cv & 0x0E0) >> 5;
+            uint8_t b = (cv & 0xE00) >> 9;
+            *color_palette++ = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
         }
     }
+
+    // Update back color
+    uint16_t *back_color = (uint16_t *)VDP2_VRAM_ADDR(3, 0x01FFFE);
+    *back_color = ((uint16_t *)format.color_palette)[background_color_idx];
 }
 
 void WaitForVBla()
 {
+    sync_palettes();
+
+    extern uint16_t demo_length;
+
+    if (demo_length)
+        demo_length--;
+
     vdp_sync();
 }
 
@@ -186,13 +239,13 @@ void init_vdp2()
 {
 
     format.scroll_screen = VDP2_SCRN_NBG0;
-    format.cc_count = VDP2_SCRN_CCC_PALETTE_256;
+    format.cc_count = VDP2_SCRN_CCC_PALETTE_16;
     format.character_size = 1 * 1;
     format.pnd_size = 1;
     format.auxiliary_mode = 0;
     format.plane_size = 1 * 1;
     format.cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000);
-    format.color_palette = (uint32_t)VDP2_CRAM_MODE_0_OFFSET(0, 0, 0);
+    format.color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0);
     format.map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
     format.map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
     format.map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
