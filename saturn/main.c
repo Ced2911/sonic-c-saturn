@@ -10,6 +10,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+
+#if __has_attribute(__fallthrough__)
+#define fallthrough __attribute__((__fallthrough__))
+#else
+#define fallthrough \
+    do              \
+    {               \
+    } while (0) /* fallthrough */
+#endif
+
 static vdp2_scrn_cell_format_t format;
 
 //
@@ -45,15 +55,16 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             uint16_t v = *((uint16_t *)tilemap);
             uint16_t page_idx = page_x + (page_width * page_y);
 
-            uint16_t tile_index = v & 0x7FF;
-            uint32_t pal = (uint32_t)(format.color_palette) + ((v >> 13) & 0x3);
+            uint16_t tile_idx = v & 0x7FF;
+            uint8_t pal_idx = (v >> 13) & 0x3;
 
-            uint32_t cpd = (uint32_t)(format.cp_table) + (tile_index << 5);
+            uint32_t pal_adr = (uint32_t)(format.color_palette) + (pal_idx * 32 * 2);
+            uint32_t cpd_adr = (uint32_t)(format.cp_table) + (tile_idx << 5);
 
             uint8_t y_flip = (v & 0x1000) != 0;
             uint8_t x_flip = (v & 0x0800) != 0;
 
-            uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd, pal, y_flip, x_flip);
+            uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
 
             pages[page_idx] = pnd;
 
@@ -177,7 +188,7 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
 
         for (size_t i = 0; i < len; i++)
         {
-            *cpd++ = *data++;
+            *cpd++ = (*data++);
         }
 #endif
     }
@@ -200,7 +211,8 @@ static void sync_palettes()
             uint8_t r = (cv & 0x00E) >> 1;
             uint8_t g = (cv & 0x0E0) >> 5;
             uint8_t b = (cv & 0xE00) >> 9;
-            *color_palette++ = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
+            //*color_palette++ = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
+            color_palette[(i * 32) + j] = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
         }
     }
 
@@ -211,12 +223,30 @@ static void sync_palettes()
 
 void WaitForVBla()
 {
-    sync_palettes();
-
     extern uint16_t demo_length;
+    extern uint8_t vbla_routine;
 
-    if (demo_length)
-        demo_length--;
+    uint8_t routine = vbla_routine;
+    if (vbla_routine != 0x00)
+    {
+        //Set VDP state
+        // VDP_SetVScroll(vid_scrpos_y_dup, vid_bg_scrpos_y_dup);
+
+        //Set screen state
+        vbla_routine = 0x00;
+    }
+
+    //Run VBlank routine
+    switch (routine)
+    {
+    case 0x02:
+        sync_palettes();
+        fallthrough;
+    case 0x14:
+        if (demo_length)
+            demo_length--;
+        break;
+    }
 
     vdp_sync();
 }
@@ -234,6 +264,7 @@ uint8_t jpad1_hold2, jpad1_press2; //Sonic controls
 
 //
 extern void GM_Sega();
+extern void GM_Title();
 
 void init_vdp2()
 {
@@ -312,6 +343,8 @@ int main(void)
     {
         GM_Sega();
         vdp_sync();
+        GM_Title();
+        vdp_sync();
     }
 
     return 0;
@@ -329,3 +362,19 @@ void user_init(void)
 
     vdp2_tvmd_display_set();
 }
+
+// Gm_Title
+uint8_t emeralds;
+uint8_t emerald_list[8];
+
+//Player state
+uint32_t score;
+uint32_t score_life;
+uint8_t last_special;
+// LevelTime time;
+uint16_t rings;
+uint8_t lives;
+uint8_t continues;
+
+int16_t demo;
+uint16_t demo_length;
