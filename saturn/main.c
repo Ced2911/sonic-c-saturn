@@ -11,6 +11,26 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "Game.h"
+
+#include "Video.h"
+#include "Palette.h"
+#include "PaletteCycle.h"
+#include "Level.h"
+#include "LevelDraw.h"
+#include "LevelScroll.h"
+#include "Object/Sonic.h"
+#include "PLC.h"
+#include "HUD.h"
+
+#include "GM_Sega.h"
+#include "GM_Title.h"
+#include "GM_Level.h"
+#include "GM_Special.h"
+#ifdef SCP_SPLASH
+	#include "GM_SSRG.h"
+#endif
+
 #if __has_attribute(__fallthrough__)
 #define fallthrough __attribute__((__fallthrough__))
 #else
@@ -73,11 +93,26 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
     }
 }
 
+// input
+uint8_t Joypad_GetState1() { return 0; }
+uint8_t Joypad_GetState2() { return 0; }
+
+// vdp
+
+void VDPSetupGame(){};
+void VDP_FillVRAM(uint8_t data, size_t len) {}
 void VDP_SetPlaneALocation(size_t loc) {}
-
 void VDP_SetPlaneBLocation(size_t loc) {}
+void VDP_SetSpriteLocation(size_t loc) {}
+void VDP_SetHScrollLocation(size_t loc) {}
+void VDP_SetPlaneSize(size_t w, size_t h) {}
+void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b) {}
+void VDP_SetHIntPosition(int16_t pos) {}
 
+// Cram
 void VDP_SeekCRAM(size_t offset) {}
+void VDP_WriteCRAM(const uint16_t *data, size_t len) {}
+void VDP_FillCRAM(uint16_t data, size_t len) {}
 
 static uint8_t background_color_idx = 0;
 void VDP_SetBackgroundColour(uint8_t index)
@@ -221,35 +256,26 @@ static void sync_palettes()
     *back_color = ((uint16_t *)format.color_palette)[background_color_idx];
 }
 
-void WaitForVBla()
-{
-    extern uint16_t demo_length;
-    extern uint8_t vbla_routine;
 
-    uint8_t routine = vbla_routine;
-    if (vbla_routine != 0x00)
-    {
-        //Set VDP state
-        // VDP_SetVScroll(vid_scrpos_y_dup, vid_bg_scrpos_y_dup);
+//Game
+ALIGNED4 uint8_t buffer0000[0xA400];
 
-        //Set screen state
-        vbla_routine = 0x00;
-    }
+uint8_t gamemode; //MSB acts as a title card flag
 
-    //Run VBlank routine
-    switch (routine)
-    {
-    case 0x02:
-        sync_palettes();
-        fallthrough;
-    case 0x14:
-        if (demo_length)
-            demo_length--;
-        break;
-    }
+int16_t demo;
+uint16_t demo_length;
+uint16_t credits_num;
 
-    vdp_sync();
-}
+uint8_t credits_cheat;
+
+uint8_t debug_cheat, debug_mode;
+
+uint8_t jpad2_hold,  jpad2_press; //Joypad 2 state
+uint8_t jpad1_hold1, jpad1_press1; //Joypad 1 state
+uint8_t jpad1_hold2, jpad1_press2; //Sonic controls
+
+uint32_t vbla_count;
+
 
 uint8_t vbla_routine;
 uint16_t level_id;
@@ -265,6 +291,243 @@ uint8_t jpad1_hold2, jpad1_press2; //Sonic controls
 //
 extern void GM_Sega();
 extern void GM_Title();
+extern void GM_Level();
+extern void GM_Special();
+
+
+//Global assets
+const uint8_t art_text[] = {
+	#include "Resource/Art/Text.h"
+};
+//General game functions
+void ReadJoypads()
+{
+	uint8_t state;
+	
+	//Read joypad 1
+	state = Joypad_GetState1();
+	jpad1_press1 = state & ~jpad1_hold1;
+	jpad1_hold1 = state;
+	
+	//Read joypad 2
+	state = Joypad_GetState2();
+	jpad2_press = state & ~jpad2_hold;
+	jpad2_hold = state;
+}
+
+//Interrupts
+void WriteVRAMBuffers()
+{
+#if 0
+	//Read joypad state
+	ReadJoypads();
+	
+	//Copy palette
+	VDP_SeekCRAM(0);
+	if (wtr_state)
+		VDP_WriteCRAM(&wet_palette[0][0], 0x40);
+	else
+		VDP_WriteCRAM(&dry_palette[0][0], 0x40);
+	
+	//Copy buffers
+	VDP_SeekVRAM(VRAM_SPRITES);
+	VDP_WriteVRAM((const uint8_t*)sprite_buffer, sizeof(sprite_buffer));
+	VDP_SeekVRAM(VRAM_HSCROLL);
+	VDP_WriteVRAM((const uint8_t*)hscroll_buffer, sizeof(hscroll_buffer));
+#else
+    sync_palettes();
+
+#endif
+}
+
+void VBlank()
+{
+    uint8_t routine = vbla_routine;
+    if (vbla_routine != 0x00)
+    {
+        //Set VDP state
+        VDP_SetVScroll(vid_scrpos_y_dup, vid_bg_scrpos_y_dup);
+
+        //Set screen state
+        vbla_routine = 0x00;
+    }
+
+    //Run VBlank routine
+    switch (routine)
+    {
+    case 0x02:
+        WriteVRAMBuffers();
+        //Fallthrough
+    case 0x14:
+        if (demo_length)
+            demo_length--;
+        break;
+    case 0x04:
+        WriteVRAMBuffers();
+        LoadTilesAsYouMove_BGOnly();
+        ProcessDPLC();
+        if (demo_length)
+            demo_length--;
+        break;
+    case 0x08:
+        //Read joypad state
+        ReadJoypads();
+
+        //Copy palette
+        sync_palettes();
+
+        //Copy buffers
+        VDP_SetHIntPosition(hbla_pos);
+#if 0
+        VDP_SeekVRAM(VRAM_SPRITES);
+        VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
+        VDP_SeekVRAM(VRAM_HSCROLL);
+        VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
+
+        //Update Sonic's art
+        if (sonframe_chg)
+        {
+            VDP_SeekVRAM(0xF000);
+            VDP_WriteVRAM(sgfx_buffer, SONIC_DPLC_SIZE);
+            sonframe_chg = false;
+        }
+#endif
+        //Copy duplicate plane positions and flags
+        scrpos_x_dup.v = scrpos_x.v;
+        scrpos_y_dup.v = scrpos_y.v;
+        bg_scrpos_x_dup.v = bg_scrpos_x.v;
+        bg_scrpos_y_dup.v = bg_scrpos_y.v;
+        bg2_scrpos_x_dup.v = bg2_scrpos_x.v;
+        bg2_scrpos_y_dup.v = bg2_scrpos_y.v;
+        bg3_scrpos_x_dup.v = bg3_scrpos_x.v;
+        bg3_scrpos_y_dup.v = bg3_scrpos_y.v;
+
+        fg_scroll_flags_dup = fg_scroll_flags;
+        bg1_scroll_flags_dup = bg1_scroll_flags;
+        bg2_scroll_flags_dup = bg2_scroll_flags;
+        bg3_scroll_flags_dup = bg3_scroll_flags;
+
+        if (hbla_pos >= 96) //Uh?
+        {
+            //Scroll camera
+            LoadTilesAsYouMove();
+
+            //Update level animations and HUD
+            AnimateLevelGfx();
+            HUD_Update();
+
+            //Process PLCs
+            ProcessDPLC2();
+
+            //Decrement demo timer
+            if (demo_length)
+                demo_length--;
+        }
+        break;
+    case 0x0A:
+        //Read joypad state
+        ReadJoypads();
+
+        //Copy palette
+        VDP_SeekCRAM(0);
+        VDP_WriteCRAM(&dry_palette[0][0], 0x40);
+
+#if 0
+        //Copy buffers
+        VDP_SetHIntPosition(hbla_pos);
+        VDP_SeekVRAM(VRAM_SPRITES);
+        VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
+        VDP_SeekVRAM(VRAM_HSCROLL);
+        VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
+
+#endif
+        //Run palette cycle
+        PCycle_SS();
+
+#if 0
+        //Update Sonic's art
+        if (sonframe_chg)
+        {
+            VDP_SeekVRAM(0xF000);
+            VDP_WriteVRAM(sgfx_buffer, SONIC_DPLC_SIZE);
+            sonframe_chg = false;
+        }
+
+#endif
+        //Decrement demo timer
+        if (demo_length)
+            demo_length--;
+        break;
+    case 0x0C:
+        //Read joypad state
+        ReadJoypads();
+
+        //Copy palette
+        sync_palettes();
+#if 0
+        //Copy buffers
+        VDP_SetHIntPosition(hbla_pos);
+        VDP_SeekVRAM(VRAM_SPRITES);
+        VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
+        VDP_SeekVRAM(VRAM_HSCROLL);
+        VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
+
+        //Update Sonic's art
+        if (sonframe_chg)
+        {
+            VDP_SeekVRAM(0xF000);
+            VDP_WriteVRAM(sgfx_buffer, SONIC_DPLC_SIZE);
+            sonframe_chg = false;
+        }
+
+#endif
+        //Copy duplicate plane positions and flags
+        scrpos_x_dup.v = scrpos_x.v;
+        scrpos_y_dup.v = scrpos_y.v;
+        bg_scrpos_x_dup.v = bg_scrpos_x.v;
+        bg_scrpos_y_dup.v = bg_scrpos_y.v;
+        bg2_scrpos_x_dup.v = bg2_scrpos_x.v;
+        bg2_scrpos_y_dup.v = bg2_scrpos_y.v;
+        bg3_scrpos_x_dup.v = bg3_scrpos_x.v;
+        bg3_scrpos_y_dup.v = bg3_scrpos_y.v;
+
+        fg_scroll_flags_dup = fg_scroll_flags;
+        bg1_scroll_flags_dup = bg1_scroll_flags;
+        bg2_scroll_flags_dup = bg2_scroll_flags;
+        bg3_scroll_flags_dup = bg3_scroll_flags;
+
+        //Scroll camera
+        LoadTilesAsYouMove();
+
+        //Update level animations and HUD
+        AnimateLevelGfx();
+        HUD_Update();
+
+        //Process PLCs
+        ProcessDPLC();
+        break;
+    case 0x12:
+        WriteVRAMBuffers();
+        ProcessDPLC();
+        break;
+    }
+
+    //Update music
+
+    //Increment VBlank counter
+    vbla_count++;
+}
+
+
+void WaitForVBla()
+{
+    VBlank();
+    vdp_sync();
+}
+
+void HBlank()
+{
+}
 
 void init_vdp2()
 {
@@ -334,11 +597,11 @@ void init_vdp2()
                               VDP2_TVMD_VERT_224);
     vdp2_tvmd_display_set();
 }
-
+#include "Game.h"
 int main(void)
 {
     init_vdp2();
-
+#if 0
     while (true)
     {
         GM_Sega();
@@ -346,7 +609,36 @@ int main(void)
         GM_Title();
         vdp_sync();
     }
-
+#else
+    while (1)
+    {
+        switch (gamemode & 0x7F)
+        {
+        case GameMode_Sega:
+            GM_Sega();
+            break;
+        case GameMode_Title:
+            GM_Title();
+            break;
+        case GameMode_Level:
+        case GameMode_Demo:
+            GM_Level();
+            break;
+        case GameMode_Special:
+            GM_Special();
+            break;
+#ifdef SCP_SPLASH
+        case GameMode_SSRG:
+            GM_SSRG();
+            break;
+#endif
+        default:
+            VDPSetupGame();
+            gamemode = GameMode_Sega;
+            break;
+        }
+    }
+#endif
     return 0;
 }
 
@@ -364,17 +656,22 @@ void user_init(void)
 }
 
 // Gm_Title
-uint8_t emeralds;
-uint8_t emerald_list[8];
+#include "Video.h"
 
-//Player state
-uint32_t score;
-uint32_t score_life;
-uint8_t last_special;
-// LevelTime time;
-uint16_t rings;
-uint8_t lives;
-uint8_t continues;
+#include "Constants.h"
+#include "Palette.h"
+#include "LevelScroll.h"
 
-int16_t demo;
-uint16_t demo_length;
+#include <string.h>
+
+//Video state
+uint8_t vbla_routine;
+
+uint8_t sprite_count;
+uint8_t hbla_pal;
+int16_t hbla_pos;
+int16_t vid_scrpos_y_dup, vid_bg_scrpos_y_dup, vid_scrpos_x_dup, vid_bg_scrpos_x_dup, vid_bg3_scrpos_y_dup, vid_bg3_scrpos_x_dup;
+
+uint16_t sprite_buffer[BUFFER_SPRITES][4]; //Apparently the last 16 entries of this intrude other memory in the original
+                                           //... now how would I emulate that?
+int16_t hscroll_buffer[SCREEN_HEIGHT][2];
