@@ -28,7 +28,7 @@
 #include "GM_Level.h"
 #include "GM_Special.h"
 #ifdef SCP_SPLASH
-	#include "GM_SSRG.h"
+#include "GM_SSRG.h"
 #endif
 
 #if __has_attribute(__fallthrough__)
@@ -40,7 +40,15 @@
     } while (0) /* fallthrough */
 #endif
 
+#define ORDER_SYSTEM_CLIP_COORDS_INDEX (0)
+#define ORDER_LOCAL_COORDS_INDEX (1)
+#define ORDER_SPRITE_START_INDEX (2)
+
 static vdp2_scrn_cell_format_t format;
+
+static vdp1_cmdt_list_t *_cmdt_list = NULL;
+static vdp1_vram_partitions_t vdp1_vram_partitions;
+static uint8_t *vdp1_pal_addr = NULL;
 
 //
 void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t height)
@@ -49,7 +57,7 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
     // VRAM_BG
     if ((offset & 0xE000) == 0xE000)
     {
-        //return;
+        return;
     }
     // VRAM_FG
     if ((offset & 0xC000) == 0xC000)
@@ -101,12 +109,31 @@ uint8_t Joypad_GetState2() { return 0; }
 
 void VDPSetupGame(){};
 void VDP_FillVRAM(uint8_t data, size_t len) {}
+
+// Mock ?
 void VDP_SetPlaneALocation(size_t loc) {}
 void VDP_SetPlaneBLocation(size_t loc) {}
 void VDP_SetSpriteLocation(size_t loc) {}
-void VDP_SetHScrollLocation(size_t loc) {}
 void VDP_SetPlaneSize(size_t w, size_t h) {}
-void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b) {}
+
+// @Todo
+void VDP_SetHScrollLocation(size_t loc)
+{
+
+    //vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a);
+    //vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b);
+}
+
+// @Todo
+void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b)
+{
+#if 0
+    vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG0, FIX16(scroll_a & 0x3FFF));
+    vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1, FIX16(scroll_b & 0x3FFF));
+#endif
+}
+
+// @Todo
 void VDP_SetHIntPosition(int16_t pos) {}
 
 // Cram
@@ -208,24 +235,16 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     // Pattern data
     if (1 && vram_offset < 0xC000)
     {
-#if 0
-        // 4bpp=>8bpp
-        uint8_t *cpd = (uint8_t *)format.cp_table + (vram_offset * 2);
-
-        for (size_t i = 0; i < len; i++)
-        {
-            uint8_t px = *data++;
-            *cpd++ = (px >> 4) & 0xF;
-            *cpd++ = px & 0xF;
-        }
-#else
         uint8_t *cpd = (uint8_t *)format.cp_table + (vram_offset);
 
         for (size_t i = 0; i < len; i++)
         {
             *cpd++ = (*data++);
         }
-#endif
+    }
+    if (1 && vram_offset == VRAM_HSCROLL)
+    {
+        // @todo...
     }
     vram_offset += len;
 }
@@ -256,7 +275,6 @@ static void sync_palettes()
     *back_color = ((uint16_t *)format.color_palette)[background_color_idx];
 }
 
-
 //Game
 ALIGNED4 uint8_t buffer0000[0xA400];
 
@@ -270,12 +288,11 @@ uint8_t credits_cheat;
 
 uint8_t debug_cheat, debug_mode;
 
-uint8_t jpad2_hold,  jpad2_press; //Joypad 2 state
+uint8_t jpad2_hold, jpad2_press;   //Joypad 2 state
 uint8_t jpad1_hold1, jpad1_press1; //Joypad 1 state
 uint8_t jpad1_hold2, jpad1_press2; //Sonic controls
 
 uint32_t vbla_count;
-
 
 uint8_t vbla_routine;
 uint16_t level_id;
@@ -294,25 +311,98 @@ extern void GM_Title();
 extern void GM_Level();
 extern void GM_Special();
 
-
 //Global assets
 const uint8_t art_text[] = {
-	#include "Resource/Art/Text.h"
+#include "Resource/Art/Text.h"
 };
 //General game functions
 void ReadJoypads()
 {
-	uint8_t state;
-	
-	//Read joypad 1
-	state = Joypad_GetState1();
-	jpad1_press1 = state & ~jpad1_hold1;
-	jpad1_hold1 = state;
-	
-	//Read joypad 2
-	state = Joypad_GetState2();
-	jpad2_press = state & ~jpad2_hold;
-	jpad2_hold = state;
+    uint8_t state;
+
+    //Read joypad 1
+    state = Joypad_GetState1();
+    jpad1_press1 = state & ~jpad1_hold1;
+    jpad1_hold1 = state;
+
+    //Read joypad 2
+    state = Joypad_GetState2();
+    jpad2_press = state & ~jpad2_hold;
+    jpad2_hold = state;
+}
+
+// Sprites - @Todo pas optimum...
+static void draw_sprites()
+{
+    vdp1_cmdt_t *cmdts = &_cmdt_list->cmdts[ORDER_SPRITE_START_INDEX];
+    vdp1_cmdt_t *vdp1_spr = cmdts;
+
+    size_t n_spr = 0;
+    uint16_t *sprite_16 = &sprite_buffer[0][0];
+    uint8_t *sprite_addr = (uint8_t *)sprite_16;
+
+    static const vdp1_cmdt_draw_mode_t draw_mode = {
+        .raw = 0x0000,
+        .bits.color_mode = 0,
+        .bits.trans_pixel_disable = false,
+        .bits.pre_clipping_disable = true,
+        .bits.end_code_disable = true};
+
+    vdp1_cmdt_color_bank_t color_bank = {.raw = 0};
+
+    for (uint8_t i = 0;;)
+    {
+        //const uint16_t *sprite = (const uint16_t *)(sprite_addr + ((uint16_t)i << 3));
+        const uint16_t *sprite = sprite_buffer[i];
+
+        //Get sprite values
+        uint16_t sprite_y = sprite[0];
+        uint16_t sprite_x = sprite[3];
+        uint16_t sprite_sl = sprite[1];
+        uint8_t sprite_width = (sprite_sl & SPRITE_SL_W_AND) >> SPRITE_SL_W_SHIFT;
+        uint8_t sprite_height = (sprite_sl & SPRITE_SL_H_AND) >> SPRITE_SL_H_SHIFT;
+        uint8_t sprite_link = (sprite_sl & SPRITE_SL_L_AND) >> SPRITE_SL_L_SHIFT;
+
+        //Write sprite
+        int16_vec2_t xy = {.x = sprite_x, .y = sprite_y};
+
+        vdp1_cmdt_normal_sprite_set(vdp1_spr);
+        vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
+        vdp1_cmdt_param_draw_mode_set(vdp1_spr, draw_mode);
+        vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
+        vdp1_cmdt_param_size_set(vdp1_spr, sprite_width, sprite_height);
+        vdp1_cmdt_param_char_base_set(vdp1_spr, NULL);
+
+        //Go to next sprite
+        if (sprite_link != 0)
+            i = sprite_link;
+        else
+            break;
+
+        sprite++;
+        vdp1_spr++;
+        n_spr++;
+    }
+
+    vdp1_cmdt_end_set(&cmdts[n_spr]);
+    vdp1_sync_cmdt_list_put(_cmdt_list, 0, NULL, NULL);
+}
+
+#define NBG0_LINE_SCROLL VDP2_VRAM_ADDR(1, 0x00000)
+
+static vdp2_scrn_ls_format_t _ls_format = {
+    .scroll_screen = VDP2_SCRN_NBG0,
+    .line_scroll_table = NBG0_LINE_SCROLL,
+    .interval = 0,
+    .enable = VDP2_SCRN_LS_HORZ};
+
+static void update_scroll()
+{
+    fix16_t *dst = (fix16_t *)(NBG0_LINE_SCROLL);
+    for (int i = 0; i < 224; i++)
+    {
+        *dst++ = FIX16(hscroll_buffer[i][1]);
+    }
 }
 
 //Interrupts
@@ -335,8 +425,9 @@ void WriteVRAMBuffers()
 	VDP_SeekVRAM(VRAM_HSCROLL);
 	VDP_WriteVRAM((const uint8_t*)hscroll_buffer, sizeof(hscroll_buffer));
 #else
+    draw_sprites();
     sync_palettes();
-
+    update_scroll();
 #endif
 }
 
@@ -518,7 +609,6 @@ void VBlank()
     vbla_count++;
 }
 
-
 void WaitForVBla()
 {
     VBlank();
@@ -527,6 +617,33 @@ void WaitForVBla()
 
 void HBlank()
 {
+}
+
+void init_vdp1()
+{
+    vdp1_vram_partitions_get(&vdp1_vram_partitions);
+    vdp1_pal_addr = (uint8_t *)VDP2_CRAM_MODE_1_OFFSET(0, 1, 0x0000);
+
+    _cmdt_list = vdp1_cmdt_list_alloc(2000);
+
+    vdp1_cmdt_t *cmdt;
+    cmdt = &_cmdt_list->cmdts[0];
+
+    static const int16_vec2_t local_coords =
+        INT16_VEC2_INITIALIZER(SCREEN_WIDTH / 2,
+                               SCREEN_HEIGHT / 2);
+
+    static const int16_vec2_t system_clip_coords =
+        INT16_VEC2_INITIALIZER(SCREEN_WIDTH,
+                               SCREEN_HEIGHT);
+
+    vdp1_cmdt_system_clip_coord_set(&cmdt[ORDER_SYSTEM_CLIP_COORDS_INDEX]);
+    vdp1_cmdt_param_vertex_set(&cmdt[ORDER_SYSTEM_CLIP_COORDS_INDEX],
+                               CMDT_VTX_SYSTEM_CLIP, &system_clip_coords);
+
+    vdp1_cmdt_local_coord_set(&cmdt[ORDER_LOCAL_COORDS_INDEX]);
+    vdp1_cmdt_param_vertex_set(&cmdt[ORDER_LOCAL_COORDS_INDEX],
+                               CMDT_VTX_LOCAL_COORD, &local_coords);
 }
 
 void init_vdp2()
@@ -548,7 +665,7 @@ void init_vdp2()
     vdp2_vram_cycp_t vram_cycp;
 
     vram_cycp.pt[0].t0 = VDP2_VRAM_CYCP_PNDR_NBG0;
-    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
     vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
@@ -596,11 +713,14 @@ void init_vdp2()
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     vdp2_tvmd_display_set();
+
+    vdp2_scrn_ls_set(&_ls_format);
 }
 #include "Game.h"
 int main(void)
 {
     init_vdp2();
+    init_vdp1();
 #if 0
     while (true)
     {
@@ -644,11 +764,25 @@ int main(void)
 
 void user_init(void)
 {
+    static const struct vdp1_env vdp1_env = {
+        .bpp = VDP1_ENV_BPP_16,
+        .rotation = VDP1_ENV_ROTATION_0,
+        .color_mode = VDP1_ENV_COLOR_MODE_RGB_PALETTE,
+        .sprite_type = 0,
+        .erase_color = COLOR_RGB1555(0, 0, 0, 0),
+        .erase_points = {
+            {0, 0},
+            {SCREEN_WIDTH, SCREEN_HEIGHT}}};
+
+    // VDP2
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
 
     vdp2_scrn_back_screen_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE),
                                     COLOR_RGB1555(1, 0, 3, 15));
+
+    // VDP1
+    vdp1_env_set(&vdp1_env);
 
     cpu_intc_mask_set(0);
 
