@@ -40,11 +40,72 @@
     } while (0) /* fallthrough */
 #endif
 
+#define BG_LINE_SCROLL VDP2_VRAM_ADDR(2, 0x00000)
+#define FG_LINE_SCROLL VDP2_VRAM_ADDR(2, 0x01000)
+
 #define ORDER_SYSTEM_CLIP_COORDS_INDEX (0)
 #define ORDER_LOCAL_COORDS_INDEX (1)
 #define ORDER_SPRITE_START_INDEX (2)
 
-static vdp2_scrn_cell_format_t format;
+static vdp2_scrn_cell_format_t format[4] = {
+    {
+        .scroll_screen = VDP2_SCRN_NBG0,
+        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
+        .character_size = 1 * 1,
+        .pnd_size = 1,
+        .auxiliary_mode = 0,
+        .plane_size = 1 * 1,
+        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
+        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
+    },
+    {
+        .scroll_screen = VDP2_SCRN_NBG1,
+        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
+        .character_size = 1 * 1,
+        .pnd_size = 1,
+        .auxiliary_mode = 0,
+        .plane_size = 1 * 1,
+        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
+        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
+    },
+    {
+        .scroll_screen = VDP2_SCRN_NBG2,
+        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
+        .character_size = 1 * 1,
+        .pnd_size = 1,
+        .auxiliary_mode = 0,
+        .plane_size = 1 * 1,
+        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
+        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
+    },
+    {
+        .scroll_screen = VDP2_SCRN_NBG3,
+        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
+        .character_size = 1 * 1,
+        .pnd_size = 1,
+        .auxiliary_mode = 0,
+        .plane_size = 1 * 1,
+        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
+        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+    }
+
+};
 
 static vdp1_cmdt_list_t *_cmdt_list = NULL;
 static vdp1_vram_partitions_t vdp1_vram_partitions;
@@ -53,25 +114,22 @@ static uint8_t *vdp1_pal_addr = NULL;
 //
 void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t height)
 {
-    //return;
-    // VRAM_BG
-    if ((offset & 0xE000) == 0xE000)
-    {
-        return;
-    }
-    // VRAM_FG
-    if ((offset & 0xC000) == 0xC000)
-    {
-        //return;
-    }
-    uint32_t page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(&format);
-    uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format);
-    uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format);
+    int is_bg = ((offset >> 13) == 7);
 
-    uint16_t *pages = (uint16_t *)format.map_bases.plane_a;
+    uint32_t page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(&format[0]);
+    uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format[0]);
+    uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[0]);
+
+    uint16_t *pages = is_bg ? (uint16_t *)format[0].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
+    //uint16_t *pages = (uint16_t *)format[0].map_bases.plane_a;
+
+    pages += ((offset & 0x3FFF) >> 1);
 
     uint32_t page_x;
     uint32_t page_y;
+
+    uint32_t screen_pal_adr = format[0].color_palette;
+    uint32_t screen_cpd_adr = format[0].cp_table;
 
     // http://md.railgun.works/index.php?title=VDP#Patterns
     for (page_y = 0; page_y < height; page_y++)
@@ -86,8 +144,8 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             uint16_t tile_idx = v & 0x7FF;
             uint8_t pal_idx = (v >> 13) & 0x3;
 
-            uint32_t pal_adr = (uint32_t)(format.color_palette) + (pal_idx * 32 * 2);
-            uint32_t cpd_adr = (uint32_t)(format.cp_table) + (tile_idx << 5);
+            uint32_t pal_adr = (uint32_t)(screen_pal_adr) + (pal_idx * 32 * 2);
+            uint32_t cpd_adr = (uint32_t)(screen_cpd_adr) + (tile_idx << 5);
 
             uint8_t y_flip = (v & 0x1000) != 0;
             uint8_t x_flip = (v & 0x0800) != 0;
@@ -149,6 +207,7 @@ void VDP_SetBackgroundColour(uint8_t index)
 
 void ClearScreen()
 {
+    memset((void *)VDP2_VRAM_ADDR(0, 0x08000), 0, 0x20000);
 }
 
 // Debug...
@@ -231,16 +290,18 @@ void VDP_SeekVRAM(size_t offset)
 
 void VDP_WriteVRAM(const uint8_t *data, size_t len)
 {
+    uint32_t screen_cpd_adr = format[0].cp_table;
     // return;
     // Pattern data
     if (1 && vram_offset < 0xC000)
     {
-        uint8_t *cpd = (uint8_t *)format.cp_table + (vram_offset);
+        // VDP2
+        uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
+        memcpy(cpd, data, len);
 
-        for (size_t i = 0; i < len; i++)
-        {
-            *cpd++ = (*data++);
-        }
+        // VDP1
+        uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
+        memcpy(tex, data, len);
     }
     if (1 && vram_offset == VRAM_HSCROLL)
     {
@@ -251,9 +312,10 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
 
 static void sync_palettes()
 {
+    uint32_t screen_pal_adr = format[0].color_palette;
     extern uint16_t dry_palette[4][16];
     // sync palette
-    uint16_t *color_palette = (uint16_t *)format.color_palette;
+    uint16_t *color_palette = (uint16_t *)screen_pal_adr;
     // *color_palette++ = COLOR_RGB_DATA | COLOR_RGB888_TO_RGB555(0, 0, 255);
     for (int i = 0; i < 4; i++)
     {
@@ -272,7 +334,7 @@ static void sync_palettes()
 
     // Update back color
     uint16_t *back_color = (uint16_t *)VDP2_VRAM_ADDR(3, 0x01FFFE);
-    *back_color = ((uint16_t *)format.color_palette)[background_color_idx];
+    *back_color = ((uint16_t *)screen_pal_adr)[background_color_idx];
 }
 
 //Game
@@ -343,7 +405,7 @@ static void draw_sprites()
 
     static const vdp1_cmdt_draw_mode_t draw_mode = {
         .raw = 0x0000,
-        .bits.color_mode = 0,
+        .bits.color_mode = 1,
         .bits.trans_pixel_disable = false,
         .bits.pre_clipping_disable = true,
         .bits.end_code_disable = true};
@@ -352,7 +414,6 @@ static void draw_sprites()
 
     for (uint8_t i = 0;;)
     {
-        //const uint16_t *sprite = (const uint16_t *)(sprite_addr + ((uint16_t)i << 3));
         const uint16_t *sprite = sprite_buffer[i];
 
         //Get sprite values
@@ -363,45 +424,64 @@ static void draw_sprites()
         uint8_t sprite_height = (sprite_sl & SPRITE_SL_H_AND) >> SPRITE_SL_H_SHIFT;
         uint8_t sprite_link = (sprite_sl & SPRITE_SL_L_AND) >> SPRITE_SL_L_SHIFT;
 
-        //Write sprite
-        int16_vec2_t xy = {.x = sprite_x, .y = sprite_y};
+        uint16_t sprite_tile = (sprite[2] & 0x3FF);
 
-        vdp1_cmdt_normal_sprite_set(vdp1_spr);
-        vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
-        vdp1_cmdt_param_draw_mode_set(vdp1_spr, draw_mode);
-        vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
-        vdp1_cmdt_param_size_set(vdp1_spr, sprite_width, sprite_height);
-        vdp1_cmdt_param_char_base_set(vdp1_spr, NULL);
+        //Write sprite
+        for (uint8_t x = 0; x < (sprite_width + 1); x++)
+        {
+            for (uint8_t y = 0; y < (sprite_height + 1); y++)
+            {
+                uint32_t tex_addr = (uint32_t)vdp1_vram_partitions.texture_base + (sprite_tile * 0x20);
+
+                int16_vec2_t xy = {
+                    .x = sprite_x + (x << 3),
+                    .y = sprite_y + (y << 3)};
+
+                vdp1_cmdt_normal_sprite_set(vdp1_spr);
+                vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
+                vdp1_cmdt_param_draw_mode_set(vdp1_spr, draw_mode);
+                vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
+                vdp1_cmdt_param_size_set(vdp1_spr, 8, 8);
+                vdp1_cmdt_param_char_base_set(vdp1_spr, tex_addr);
+
+                vdp1_spr++;
+                sprite_tile++;
+                n_spr++;
+            }
+        }
 
         //Go to next sprite
         if (sprite_link != 0)
             i = sprite_link;
         else
             break;
-
-        sprite++;
-        vdp1_spr++;
-        n_spr++;
     }
 
     vdp1_cmdt_end_set(&cmdts[n_spr]);
+    _cmdt_list->count = n_spr + ORDER_SPRITE_START_INDEX;
     vdp1_sync_cmdt_list_put(_cmdt_list, 0, NULL, NULL);
 }
 
-#define NBG0_LINE_SCROLL VDP2_VRAM_ADDR(1, 0x00000)
-
-static vdp2_scrn_ls_format_t _ls_format = {
+static vdp2_scrn_ls_format_t _ls_format_bg = {
     .scroll_screen = VDP2_SCRN_NBG0,
-    .line_scroll_table = NBG0_LINE_SCROLL,
+    .line_scroll_table = BG_LINE_SCROLL,
+    .interval = 0,
+    .enable = VDP2_SCRN_LS_HORZ};
+
+static vdp2_scrn_ls_format_t _ls_format_fg = {
+    .scroll_screen = VDP2_SCRN_NBG1,
+    .line_scroll_table = FG_LINE_SCROLL,
     .interval = 0,
     .enable = VDP2_SCRN_LS_HORZ};
 
 static void update_scroll()
 {
-    fix16_t *dst = (fix16_t *)(NBG0_LINE_SCROLL);
+    fix16_t *fg_dst = (fix16_t *)(FG_LINE_SCROLL);
+    fix16_t *bg_dst = (fix16_t *)(BG_LINE_SCROLL);
     for (int i = 0; i < 224; i++)
     {
-        *dst++ = FIX16(hscroll_buffer[i][1]);
+        *fg_dst++ = FIX16(hscroll_buffer[i][1]);
+        *bg_dst++ = FIX16(hscroll_buffer[i][0]);
     }
 }
 
@@ -628,10 +708,13 @@ void init_vdp1()
 
     vdp1_cmdt_t *cmdt;
     cmdt = &_cmdt_list->cmdts[0];
-
+    /*
     static const int16_vec2_t local_coords =
         INT16_VEC2_INITIALIZER(SCREEN_WIDTH / 2,
                                SCREEN_HEIGHT / 2);
+*/
+
+    static const int16_vec2_t local_coords = {.x = 0, .y = 0};
 
     static const int16_vec2_t system_clip_coords =
         INT16_VEC2_INITIALIZER(SCREEN_WIDTH,
@@ -648,27 +731,13 @@ void init_vdp1()
 
 void init_vdp2()
 {
-
-    format.scroll_screen = VDP2_SCRN_NBG0;
-    format.cc_count = VDP2_SCRN_CCC_PALETTE_16;
-    format.character_size = 1 * 1;
-    format.pnd_size = 1;
-    format.auxiliary_mode = 0;
-    format.plane_size = 1 * 1;
-    format.cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000);
-    format.color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0);
-    format.map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
-    format.map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
-    format.map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
-    format.map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000);
-
     vdp2_vram_cycp_t vram_cycp;
 
     vram_cycp.pt[0].t0 = VDP2_VRAM_CYCP_PNDR_NBG0;
     vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
-    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_NO_ACCESS;
-    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_NO_ACCESS;
-    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
+    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
+    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
+    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG3;
     vram_cycp.pt[0].t5 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[0].t6 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[0].t7 = VDP2_VRAM_CYCP_NO_ACCESS;
@@ -702,19 +771,33 @@ void init_vdp2()
 
     vdp2_vram_cycp_set(&vram_cycp);
 
-    _copy_character_pattern_data(&format);
-    _copy_color_palette(&format);
-    _copy_map(&format);
+    _copy_character_pattern_data(&format[0]);
+    _copy_color_palette(&format[0]);
+    _copy_map(&format[0]);
 
-    vdp2_scrn_cell_format_set(&format);
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 7);
+    vdp2_scrn_cell_format_set(&format[0]);
+    vdp2_scrn_cell_format_set(&format[1]);
+    vdp2_scrn_cell_format_set(&format[2]);
+    vdp2_scrn_cell_format_set(&format[3]);
+
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 4);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 3);
+    vdp2_scrn_priority_set(VDP2_SCRN_SPRITE, 2);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG2, 1);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 0);
+    vdp2_sprite_priority_set(0, 6);
+
     vdp2_scrn_display_set(VDP2_SCRN_NBG0, /* transparent = */ false);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG1, /* transparent = */ false);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG2, /* transparent = */ false);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG3, /* transparent = */ false);
 
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     vdp2_tvmd_display_set();
 
-    vdp2_scrn_ls_set(&_ls_format);
+    vdp2_scrn_ls_set(&_ls_format_bg);
+    vdp2_scrn_ls_set(&_ls_format_fg);
 }
 #include "Game.h"
 int main(void)
@@ -767,7 +850,7 @@ void user_init(void)
     static const struct vdp1_env vdp1_env = {
         .bpp = VDP1_ENV_BPP_16,
         .rotation = VDP1_ENV_ROTATION_0,
-        .color_mode = VDP1_ENV_COLOR_MODE_RGB_PALETTE,
+        .color_mode = VDP1_ENV_COLOR_MODE_PALETTE,
         .sprite_type = 0,
         .erase_color = COLOR_RGB1555(0, 0, 0, 0),
         .erase_points = {
