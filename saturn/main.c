@@ -120,10 +120,12 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
     uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format[0]);
     uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[0]);
 
-    uint16_t *pages = is_bg ? (uint16_t *)format[0].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
+    uint16_t *pages = is_bg ? (uint16_t *)format[1].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
     //uint16_t *pages = (uint16_t *)format[0].map_bases.plane_a;
 
-    pages += ((offset & 0x3FFF) >> 1);
+    // if (!is_bg) return;
+
+    pages += ((offset & 0x1FFF) >> 1);
 
     uint32_t page_x;
     uint32_t page_y;
@@ -149,6 +151,11 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
 
             uint8_t y_flip = (v & 0x1000) != 0;
             uint8_t x_flip = (v & 0x0800) != 0;
+
+            uint8_t prio = v >> 15;
+            if (prio) {
+                cpd_adr += 0x10000;
+            } 
 
             uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
 
@@ -787,17 +794,17 @@ void init_vdp2()
     vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 0);
     vdp2_sprite_priority_set(0, 6);
 
-    vdp2_scrn_display_set(VDP2_SCRN_NBG0, /* transparent = */ false);
-    vdp2_scrn_display_set(VDP2_SCRN_NBG1, /* transparent = */ false);
-    vdp2_scrn_display_set(VDP2_SCRN_NBG2, /* transparent = */ false);
-    vdp2_scrn_display_set(VDP2_SCRN_NBG3, /* transparent = */ false);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG0, true);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG1, true);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG2, true);
+    vdp2_scrn_display_set(VDP2_SCRN_NBG3, true);
 
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     vdp2_tvmd_display_set();
 
-    vdp2_scrn_ls_set(&_ls_format_bg);
-    vdp2_scrn_ls_set(&_ls_format_fg);
+    //  vdp2_scrn_ls_set(&_ls_format_bg);
+    // vdp2_scrn_ls_set(&_ls_format_fg);
 }
 #include "Game.h"
 int main(void)
