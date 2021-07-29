@@ -3,5 +3,25 @@
         "stdint.h": "c",
         "segabg.h": "c",
         "text.h": "c"
-    }
+    },
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell"
+        },
+        "Msys64": {
+            "path": "C:\\msys64\\msys2_shell.cmd",
+            "args": [
+                "-mingw64",
+                "-defterm",
+                "-no-start",
+                "-here",
+                "-full-path"
+            ],
+            "env": {
+                "MSYSTEM": "MINGW64",
+                "CHERE_INVOKING": "1"
+            }
+        }
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }

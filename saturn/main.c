@@ -57,27 +57,13 @@ static vdp2_scrn_cell_format_t format[4] = {
         .plane_size = 1 * 1,
         .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
         .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
-        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
-        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
-        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
-        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x08000),
-    },
-    {
-        .scroll_screen = VDP2_SCRN_NBG1,
-        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
-        .character_size = 1 * 1,
-        .pnd_size = 1,
-        .auxiliary_mode = 0,
-        .plane_size = 1 * 1,
-        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
-        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
         .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
         .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
         .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
         .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
     },
     {
-        .scroll_screen = VDP2_SCRN_NBG2,
+        .scroll_screen = VDP2_SCRN_NBG1,
         .cc_count = VDP2_SCRN_CCC_PALETTE_16,
         .character_size = 1 * 1,
         .pnd_size = 1,
@@ -91,7 +77,7 @@ static vdp2_scrn_cell_format_t format[4] = {
         .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
     },
     {
-        .scroll_screen = VDP2_SCRN_NBG3,
+        .scroll_screen = VDP2_SCRN_NBG2,
         .cc_count = VDP2_SCRN_CCC_PALETTE_16,
         .character_size = 1 * 1,
         .pnd_size = 1,
@@ -103,6 +89,20 @@ static vdp2_scrn_cell_format_t format[4] = {
         .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
         .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
         .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+    },
+    {
+        .scroll_screen = VDP2_SCRN_NBG3,
+        .cc_count = VDP2_SCRN_CCC_PALETTE_16,
+        .character_size = 1 * 1,
+        .pnd_size = 1,
+        .auxiliary_mode = 0,
+        .plane_size = 1 * 1,
+        .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
+        .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(1, 0x08000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x08000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x08000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x08000),
     }
 
 };
@@ -153,9 +153,10 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             uint8_t x_flip = (v & 0x0800) != 0;
 
             uint8_t prio = v >> 15;
-            if (prio) {
+            if (prio)
+            {
                 cpd_adr += 0x10000;
-            } 
+            }
 
             uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
 
@@ -721,7 +722,7 @@ void init_vdp1()
                                SCREEN_HEIGHT / 2);
 */
 
-    static const int16_vec2_t local_coords = {.x = 0, .y = 0};
+    static const int16_vec2_t local_coords = {.x = -128, .y = -128};
 
     static const int16_vec2_t system_clip_coords =
         INT16_VEC2_INITIALIZER(SCREEN_WIDTH,
@@ -741,13 +742,13 @@ void init_vdp2()
     vdp2_vram_cycp_t vram_cycp;
 
     vram_cycp.pt[0].t0 = VDP2_VRAM_CYCP_PNDR_NBG0;
-    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
-    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
-    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
-    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG3;
-    vram_cycp.pt[0].t5 = VDP2_VRAM_CYCP_NO_ACCESS;
-    vram_cycp.pt[0].t6 = VDP2_VRAM_CYCP_NO_ACCESS;
-    vram_cycp.pt[0].t7 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_PNDR_NBG0;
+    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
+    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
+    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
+    vram_cycp.pt[0].t5 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
+    vram_cycp.pt[0].t6 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
+    vram_cycp.pt[0].t7 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
 
     vram_cycp.pt[1].t0 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[1].t1 = VDP2_VRAM_CYCP_NO_ACCESS;
@@ -820,6 +821,7 @@ int main(void)
         vdp_sync();
     }
 #else
+    gamemode = GameMode_Title;
     while (1)
     {
         switch (gamemode & 0x7F)

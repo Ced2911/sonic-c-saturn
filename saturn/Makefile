@@ -52,9 +52,10 @@ SH_SRCS:= \
 	../src/SpecialStage.c
 	
 SH_LIBRARIES:=
-SH_CFLAGS+= -O2 -I. -I../src -I../src/Backend -I../src/Object  -save-temps=obj \
+SH_CFLAGS+= -O2 -g -I. -I../src -I../src/Backend -I../src/Object  -save-temps=obj \
 	-Wno-unused-parameter -Wno-unused-variable -Wno-implicit-fallthrough -Wno-sequence-point \
-	-Wno-discarded-qualifiers
+	-Wno-discarded-qualifiers -Wno-unused-function \
+	-DSCP_FIX_BUGS
 
 IP_VERSION:= V0.001
 IP_RELEASE_DATE:= 20180214
