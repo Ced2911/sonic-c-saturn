@@ -7,6 +7,8 @@ include $(YAUL_INSTALL_ROOT)/share/pre.common.mk
 SH_PROGRAM:= sonic1
 SH_SRCS:= \
 	main.c \
+	vdp2.c \
+	vdp1.c \
 	../src/Object.c \
 	../src/Object/BuzzBomber.c  \
 	../src/Object/Chopper.c \
