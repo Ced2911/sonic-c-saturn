@@ -36,6 +36,7 @@ SH_SRCS:= \
 	../src/GM_Level.c \
 	../src/GM_Sega.c \
 	../src/GM_Special.c \
+	../src/GM_SSRG.c \
 	../src/GM_Title.c \
 	../src/HUD.c \
 	../src/Kosinski.c \
