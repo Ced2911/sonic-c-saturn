@@ -48,6 +48,7 @@ void Obj_HUD(Object *obj)
 					DisplaySprite(obj);
 				}
 			#else
+			{
 				//Determine frame and draw
 				uint8_t frame = 0;
 				if (!(frame_count & 8))
@@ -59,6 +60,7 @@ void Obj_HUD(Object *obj)
 				}
 				obj->frame = frame;
 				DisplaySprite(obj);
+			}
 			#endif
 			break;
 	}
