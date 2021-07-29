@@ -112,6 +112,39 @@ static vdp1_vram_partitions_t vdp1_vram_partitions;
 static uint8_t *vdp1_pal_addr = NULL;
 
 //
+void SetTileMap(const uint8_t *tilemap, size_t offset)
+{
+    int is_bg = ((offset >> 13) == 7);
+    uint16_t *pages = is_bg ? (uint16_t *)format[1].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
+    pages += ((offset & 0x1FFF) >> 1);
+
+    uint32_t screen_pal_adr = format[0].color_palette;
+    uint32_t screen_cpd_adr = format[0].cp_table;
+
+
+    uint16_t v = *((uint16_t *)tilemap);
+
+    uint16_t tile_idx = v & 0x7FF;
+    uint8_t pal_idx = (v >> 13) & 0x3;
+
+    uint32_t pal_adr = (uint32_t)(screen_pal_adr) + (pal_idx * 32 * 2);
+    uint32_t cpd_adr = (uint32_t)(screen_cpd_adr) + (tile_idx << 5);
+
+    uint8_t y_flip = (v & 0x1000) != 0;
+    uint8_t x_flip = (v & 0x0800) != 0;
+
+    uint8_t prio = v >> 15;
+    if (prio)
+    {
+        // cpd_adr += 0x10000;
+    }
+
+    uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
+
+    *pages = pnd;
+}
+
+//
 void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t height)
 {
     int is_bg = ((offset >> 13) == 7);
@@ -155,7 +188,7 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             uint8_t prio = v >> 15;
             if (prio)
             {
-                cpd_adr += 0x10000;
+                // cpd_adr += 0x10000;
             }
 
             uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
@@ -215,7 +248,11 @@ void VDP_SetBackgroundColour(uint8_t index)
 
 void ClearScreen()
 {
-    memset((void *)VDP2_VRAM_ADDR(0, 0x08000), 0, 0x20000);
+    // Vdp 2
+    memset((void *)format[0].map_bases.plane_a, 0, VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[0]));
+    memset((void *)format[1].map_bases.plane_a, 0, VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[1]));
+    // Sprites
+    //memset((void *)vdp1_vram_partitions.texture_base, 0, vdp1_vram_partitions.texture_size);
 }
 
 // Debug...
@@ -299,9 +336,9 @@ void VDP_SeekVRAM(size_t offset)
 void VDP_WriteVRAM(const uint8_t *data, size_t len)
 {
     uint32_t screen_cpd_adr = format[0].cp_table;
-    // return;
-    // Pattern data
-    if (1 && vram_offset < 0xC000)
+    // Pattern data - no transformation
+    // Duplicate data in vdp1
+    if (1 && vram_offset < VRAM_FG)
     {
         // VDP2
         uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
@@ -311,15 +348,57 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
         uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
         memcpy(tex, data, len);
     }
-    if (1 && vram_offset == VRAM_HSCROLL)
+    // FG
+    else if (vram_offset >= VRAM_FG && vram_offset < VRAM_BG)
+    {
+        for (size_t i = 0; i < len; i += 2)
+        {
+            SetTileMap(data, vram_offset);
+            data += 2;
+        }
+    }
+    // BG
+    else if (vram_offset >= VRAM_BG && vram_offset < VRAM_SONIC)
+    {
+        for (size_t i = 0; i < len; i += 2)
+        {
+            SetTileMap(data, vram_offset);
+            data += 2;
+        }
+    }
+    // SONIC
+    else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
+    {
+    }
+
+    // Sprite tbl
+    else if (vram_offset >= VRAM_SPRITES && vram_offset < VRAM_HSCROLL)
+    {
+    }
+
+    // Scroll
+    else if (1 && vram_offset == VRAM_HSCROLL)
     {
         // @todo...
     }
     vram_offset += len;
 }
 
+static uint16_t MD_TO_SS_PALETTE(uint16_t cv)
+{
+    static const uint8_t col_level[] = {0, 6, 10, 14, 18, 21, 25, 31};
+
+    uint8_t r = (cv & 0x00E) >> 1;
+    uint8_t g = (cv & 0x0E0) >> 5;
+    uint8_t b = (cv & 0xE00) >> 9;
+
+    return COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
+}
+
 static void sync_palettes()
 {
+    // https://segaretro.org/Sega_Mega_Drive/Palettes_and_CRAM
+
     uint32_t screen_pal_adr = format[0].color_palette;
     extern uint16_t dry_palette[4][16];
     // sync palette
@@ -329,20 +408,17 @@ static void sync_palettes()
     {
         for (int j = 0; j < 16; j++)
         {
-            // https://segaretro.org/Sega_Mega_Drive/Palettes_and_CRAM
-            static const uint8_t col_level[] = {0, 6, 10, 14, 18, 21, 25, 31};
             uint16_t cv = dry_palette[i][j];
-            uint8_t r = (cv & 0x00E) >> 1;
-            uint8_t g = (cv & 0x0E0) >> 5;
-            uint8_t b = (cv & 0xE00) >> 9;
             //*color_palette++ = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
-            color_palette[(i * 32) + j] = COLOR_RGB_DATA | (col_level[b] << 10) | (col_level[g] << 5) | col_level[r];
+            color_palette[(i * 32) + j] = MD_TO_SS_PALETTE(cv);
         }
     }
 
     // Update back color
     uint16_t *back_color = (uint16_t *)VDP2_VRAM_ADDR(3, 0x01FFFE);
-    *back_color = ((uint16_t *)screen_pal_adr)[background_color_idx];
+    uint16_t *pal = (uint16_t *)dry_palette;
+
+    *back_color = MD_TO_SS_PALETTE(pal[background_color_idx]);
 }
 
 //Game
@@ -821,7 +897,7 @@ int main(void)
         vdp_sync();
     }
 #else
-    gamemode = GameMode_Title;
+    gamemode = GameMode_Sega;
     while (1)
     {
         switch (gamemode & 0x7F)
