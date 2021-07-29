@@ -121,7 +121,6 @@ void SetTileMap(const uint8_t *tilemap, size_t offset)
     uint32_t screen_pal_adr = format[0].color_palette;
     uint32_t screen_cpd_adr = format[0].cp_table;
 
-
     uint16_t v = *((uint16_t *)tilemap);
 
     uint16_t tile_idx = v & 0x7FF;
@@ -369,6 +368,9 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     // SONIC
     else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
     {
+        // VDP1
+        uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
+        memcpy(tex, data, len);
     }
 
     // Sprite tbl
@@ -508,7 +510,7 @@ static void draw_sprites()
         uint8_t sprite_height = (sprite_sl & SPRITE_SL_H_AND) >> SPRITE_SL_H_SHIFT;
         uint8_t sprite_link = (sprite_sl & SPRITE_SL_L_AND) >> SPRITE_SL_L_SHIFT;
 
-        uint16_t sprite_tile = (sprite[2] & 0x3FF);
+        uint16_t sprite_tile = (sprite[2] & 0x7FF);
 
         //Write sprite
         for (uint8_t x = 0; x < (sprite_width + 1); x++)
@@ -880,8 +882,8 @@ void init_vdp2()
                               VDP2_TVMD_VERT_224);
     vdp2_tvmd_display_set();
 
-    //  vdp2_scrn_ls_set(&_ls_format_bg);
-    // vdp2_scrn_ls_set(&_ls_format_fg);
+    vdp2_scrn_ls_set(&_ls_format_bg);
+    vdp2_scrn_ls_set(&_ls_format_fg);
 }
 #include "Game.h"
 int main(void)
