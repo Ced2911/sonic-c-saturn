@@ -43,7 +43,7 @@
 
 //Global assets
 const uint8_t art_text[] = {
-	#include "Resource/Art/Text.h"
+#include "Resource/Art/Text.h"
 };
 
 //Game
@@ -103,9 +103,9 @@ void VDP_SetHScrollLocation(size_t loc)
 // @Todo
 void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b)
 {
-#if 0
-    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, FIX16(scroll_a & 0x3FFF));
-    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, FIX16(scroll_b & 0x3FFF));
+#if 1
+    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a<<16);
+    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b<<16);
 #endif
 }
 
@@ -171,7 +171,7 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
             data += 2;
         }
     }
-    // SONIC    
+    // SONIC
     // Pattern data - no transformation
     // Duplicate data in vdp1
     else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
@@ -254,27 +254,13 @@ void ReadJoypads()
 //Interrupts
 void WriteVRAMBuffers()
 {
-#if 0
 	//Read joypad state
-	
-	//Copy palette
-	VDP_SeekCRAM(0);
-	if (wtr_state)
-		VDP_WriteCRAM(&wet_palette[0][0], 0x40);
-	else
-		VDP_WriteCRAM(&dry_palette[0][0], 0x40);
-	
-	//Copy buffers
-	VDP_SeekVRAM(VRAM_SPRITES);
-	VDP_WriteVRAM((const uint8_t*)sprite_buffer, sizeof(sprite_buffer));
-	VDP_SeekVRAM(VRAM_HSCROLL);
-	VDP_WriteVRAM((const uint8_t*)hscroll_buffer, sizeof(hscroll_buffer));
-#else
     ReadJoypads();
-    draw_sprites();
+	//Copy palette
     sync_palettes();
+	//Copy buffers
+    draw_sprites();
     update_scroll();
-#endif
 }
 
 void VBlank()
@@ -320,8 +306,9 @@ void VBlank()
         VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
         VDP_SeekVRAM(VRAM_HSCROLL);
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
-
 #endif
+        update_scroll();
+
         //Update Sonic's art
         if (sonframe_chg)
         {
@@ -377,8 +364,8 @@ void VBlank()
         VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
         VDP_SeekVRAM(VRAM_HSCROLL);
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
-
 #endif
+        update_scroll();
         //Run palette cycle
         PCycle_SS();
 
@@ -411,6 +398,8 @@ void VBlank()
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
 
 #endif
+        update_scroll();
+
         //Update Sonic's art
         if (sonframe_chg)
         {

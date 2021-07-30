@@ -222,14 +222,15 @@ static vdp2_scrn_ls_format_t _ls_format_fg = {
 
 void update_scroll()
 {
-    fix16_t *fg_dst = (fix16_t *)(FG_LINE_SCROLL);
-    fix16_t *bg_dst = (fix16_t *)(BG_LINE_SCROLL);
+	int16_t *scroll = &hscroll_buffer[0][0];
+    int32_t *fg_dst = (int32_t *)(FG_LINE_SCROLL);
+    int32_t *bg_dst = (int32_t *)(BG_LINE_SCROLL);
     for (int i = 0; i < 224; i++)
     {
         // for (int k = 0; k < 8; k++)
         {
-            *fg_dst++ = FIX16(-hscroll_buffer[i][1] & 0x3FFF);
-            *bg_dst++ = FIX16(-hscroll_buffer[i][0] & 0x3FFF);
+            *bg_dst++ = ((-*scroll++)<<16);
+            *fg_dst++ = ((-*scroll++)<<16);
         }
     }
 }
