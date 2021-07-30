@@ -202,6 +202,9 @@ void sync_palettes()
     uint16_t *pal = (uint16_t *)dry_palette;
 
     *back_color = MD_TO_SS_PALETTE(pal[background_color_idx]);
+    
+    vdp2_scrn_back_screen_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE),
+                                    (color_rgb1555_t)(*back_color));
 }
 
 //=========================================================

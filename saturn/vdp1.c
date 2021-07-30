@@ -17,8 +17,8 @@ void draw_sprites()
 
     size_t n_spr = 0;
     uint16_t *sprite_16 = &sprite_buffer[0][0];
-    // uint8_t *sprite_addr = (uint8_t *)sprite_16;
-    uint8_t *sprite_addr = &vdp_vram[VRAM_SPRITES];
+    uint8_t *sprite_addr = (uint8_t *)sprite_16;
+    //uint8_t *sprite_addr = &vdp_vram[VRAM_SPRITES];
 
     static const vdp1_cmdt_draw_mode_t draw_mode = {
         .raw = 0x0000,
@@ -31,7 +31,7 @@ void draw_sprites()
 
     for (uint8_t i = 0;;)
     {
-        const uint16_t *sprite = sprite_buffer[i];
+        const uint16_t *sprite = (const uint16_t *)sprite_buffer[i];
 
         //Get sprite values
         uint16_t sprite_y = sprite[0];
@@ -41,8 +41,10 @@ void draw_sprites()
         uint8_t sprite_height = (sprite_sl & SPRITE_SL_H_AND) >> SPRITE_SL_H_SHIFT;
         uint8_t sprite_link = (sprite_sl & SPRITE_SL_L_AND) >> SPRITE_SL_L_SHIFT;
         uint8_t sprite_pal = (sprite[2] >> 13) & 3;
-
         uint16_t sprite_tile = (sprite[2] & 0x7FF);
+
+        uint8_t sprite_flip_y = (sprite[2] & 0x1000) != 0;
+        uint8_t sprite_flip_x = (sprite[2] & 0x0800) != 0;
 
         //Write sprite
         for (uint8_t x = 0; x < (sprite_width + 1); x++)
@@ -63,6 +65,8 @@ void draw_sprites()
                 vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
                 vdp1_cmdt_param_size_set(vdp1_spr, 8, 8);
                 vdp1_cmdt_param_char_base_set(vdp1_spr, tex_addr);
+                vdp1_cmdt_param_horizontal_flip_set(vdp1_spr, sprite_flip_x);
+                vdp1_cmdt_param_vertical_flip_set(vdp1_spr, sprite_flip_y);
 
                 vdp1_spr++;
                 sprite_tile++;

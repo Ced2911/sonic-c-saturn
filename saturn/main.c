@@ -95,17 +95,16 @@ ALIGNED2 uint8_t vdp_vram[VRAM_SIZE];
 //=========================================================
 void VDP_SetHScrollLocation(size_t loc)
 {
-
-    //vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a);
-    //vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b);
+    // Unused
 }
 
 // @Todo
 void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b)
 {
 #if 1
-    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a<<16);
-    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b<<16);
+    // bug
+    // vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a << 16);
+    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b << 16);
 #endif
 }
 
@@ -185,16 +184,16 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
         memcpy(tex, data, len);
     }
 
-    // Sprite tbl
+    // Sprite tbl - unused
     else if (vram_offset >= VRAM_SPRITES && vram_offset < VRAM_HSCROLL)
     {
         memcpy((void *)vdp_vram + vram_offset, data, len);
     }
 
-    // Scroll
+    // Scroll - unused
     else if (1 && vram_offset == VRAM_HSCROLL)
     {
-        // @todo...
+        memcpy((void *)vdp_vram + vram_offset, data, len);
     }
     vram_offset += len;
 }
@@ -213,6 +212,7 @@ void ClearScreen()
 
     if (1)
     {
+        update_scroll();
         vdp1_clear_cmdt();
     }
 
@@ -254,11 +254,11 @@ void ReadJoypads()
 //Interrupts
 void WriteVRAMBuffers()
 {
-	//Read joypad state
+    //Read joypad state
     ReadJoypads();
-	//Copy palette
+    //Copy palette
     sync_palettes();
-	//Copy buffers
+    //Copy buffers
     draw_sprites();
     update_scroll();
 }
