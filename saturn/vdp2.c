@@ -12,11 +12,13 @@ vdp2_scrn_cell_format_t format[4] = {
         .scroll_screen = VDP2_SCRN_NBG0,
         .cc_count = VDP2_SCRN_CCC_PALETTE_16,
         .character_size = 1 * 1,
-        .pnd_size = 1,
+        .pnd_size = 2,
         .auxiliary_mode = 0,
         .plane_size = 1 * 1,
         .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
         .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .sf_type = VDP2_SCRN_SF_TYPE_PRIORITY,
+        .sf_mode = 1 /** per tile **/,
         .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
         .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
         .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x10000),
@@ -26,11 +28,13 @@ vdp2_scrn_cell_format_t format[4] = {
         .scroll_screen = VDP2_SCRN_NBG1,
         .cc_count = VDP2_SCRN_CCC_PALETTE_16,
         .character_size = 1 * 1,
-        .pnd_size = 1,
+        .pnd_size = 2,
         .auxiliary_mode = 0,
         .plane_size = 1 * 1,
         .cp_table = (uint32_t)VDP2_VRAM_ADDR(0, 0x00000),
         .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
+        .sf_type = VDP2_SCRN_SF_TYPE_PRIORITY,
+        .sf_mode = 1 /** per tile **/,
         .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
         .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
         .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
@@ -73,7 +77,7 @@ vdp2_scrn_cell_format_t format[4] = {
 void SetTileMap(const uint8_t *tilemap, size_t offset)
 {
     int is_bg = ((offset >> 13) == 7);
-    uint16_t *pages = is_bg ? (uint16_t *)format[1].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
+    uint32_t *pages = is_bg ? (uint32_t *)format[1].map_bases.plane_a : (uint32_t *)format[0].map_bases.plane_a;
     pages += ((offset & 0x1FFF) >> 1);
 
     uint32_t screen_pal_adr = format[0].color_palette;
@@ -90,13 +94,13 @@ void SetTileMap(const uint8_t *tilemap, size_t offset)
     uint8_t y_flip = (v & 0x1000) != 0;
     uint8_t x_flip = (v & 0x0800) != 0;
 
-    uint8_t prio = v >> 15;
+    uint8_t prio = (v >> 15) ? 1 : 0;
     if (prio)
     {
         // cpd_adr += 0x10000;
     }
 
-    uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
+    uint32_t pnd = VDP2_SCRN_PND_CONFIG_8(1, cpd_adr, pal_adr, y_flip, x_flip, prio, 0);
 
     *pages = pnd;
 }
@@ -110,7 +114,7 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
     uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format[0]);
     uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[0]);
 
-    uint16_t *pages = is_bg ? (uint16_t *)format[1].map_bases.plane_a : (uint16_t *)format[0].map_bases.plane_a;
+    uint32_t *pages = is_bg ? (uint32_t *)format[1].map_bases.plane_a : (uint32_t *)format[0].map_bases.plane_a;
     //uint16_t *pages = (uint16_t *)format[0].map_bases.plane_a;
 
     // if (!is_bg) return;
@@ -142,13 +146,13 @@ void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t hei
             uint8_t y_flip = (v & 0x1000) != 0;
             uint8_t x_flip = (v & 0x0800) != 0;
 
-            uint8_t prio = v >> 15;
+            uint8_t prio = (v >> 15) ? 1 : 0;
             if (prio)
             {
                 // cpd_adr += 0x10000;
             }
 
-            uint16_t pnd = VDP2_SCRN_PND_CONFIG_0(1, cpd_adr, pal_adr, y_flip, x_flip);
+            uint32_t pnd = VDP2_SCRN_PND_CONFIG_8(1, cpd_adr, pal_adr, y_flip, x_flip, prio, 0);
 
             pages[page_idx] = pnd;
 
@@ -202,7 +206,7 @@ void sync_palettes()
     uint16_t *pal = (uint16_t *)dry_palette;
 
     *back_color = MD_TO_SS_PALETTE(pal[background_color_idx]);
-    
+
     vdp2_scrn_back_screen_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE),
                                     (color_rgb1555_t)(*back_color));
 }
@@ -225,15 +229,15 @@ static vdp2_scrn_ls_format_t _ls_format_fg = {
 
 void update_scroll()
 {
-	int16_t *scroll = &hscroll_buffer[0][0];
+    int16_t *scroll = &hscroll_buffer[0][0];
     int32_t *fg_dst = (int32_t *)(FG_LINE_SCROLL);
     int32_t *bg_dst = (int32_t *)(BG_LINE_SCROLL);
     for (int i = 0; i < 224; i++)
     {
         // for (int k = 0; k < 8; k++)
         {
-            *bg_dst++ = ((-*scroll++)<<16);
-            *fg_dst++ = ((-*scroll++)<<16);
+            *bg_dst++ = ((-*scroll++) << 16);
+            *fg_dst++ = ((-*scroll++) << 16);
         }
     }
 }
@@ -282,20 +286,28 @@ void init_vdp2()
 
     vdp2_scrn_cell_format_set(&format[0]);
     vdp2_scrn_cell_format_set(&format[1]);
-    vdp2_scrn_cell_format_set(&format[2]);
-    vdp2_scrn_cell_format_set(&format[3]);
+    //vdp2_scrn_cell_format_set(&format[2]);
+    //vdp2_scrn_cell_format_set(&format[3]);
 
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 4);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 3);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 3);
     vdp2_scrn_priority_set(VDP2_SCRN_SPRITE, 2);
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG2, 1);
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 0);
-    vdp2_sprite_priority_set(0, 6);
+    // vdp2_scrn_priority_set(VDP2_SCRN_NBG2, 1);
+    // vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 0);
+
+    vdp2_sprite_priority_set(0, 3);
+    vdp2_sprite_priority_set(1, 1);
+    vdp2_sprite_priority_set(2, 2);
+    vdp2_sprite_priority_set(3, 3);
+    vdp2_sprite_priority_set(4, 4);
+    vdp2_sprite_priority_set(5, 5);
+    vdp2_sprite_priority_set(6, 6);
+    vdp2_sprite_priority_set(7, 7);
 
     vdp2_scrn_display_set(VDP2_SCRN_NBG0, true);
     vdp2_scrn_display_set(VDP2_SCRN_NBG1, true);
-    vdp2_scrn_display_set(VDP2_SCRN_NBG2, true);
-    vdp2_scrn_display_set(VDP2_SCRN_NBG3, true);
+    // vdp2_scrn_display_set(VDP2_SCRN_NBG2, true);
+    //vdp2_scrn_display_set(VDP2_SCRN_NBG3, true);
 
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);

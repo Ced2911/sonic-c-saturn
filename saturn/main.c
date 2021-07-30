@@ -307,6 +307,7 @@ void VBlank()
         VDP_SeekVRAM(VRAM_HSCROLL);
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
 #endif
+        draw_sprites();
         update_scroll();
 
         //Update Sonic's art
@@ -357,14 +358,15 @@ void VBlank()
         VDP_SeekCRAM(0);
         VDP_WriteCRAM(&dry_palette[0][0], 0x40);
 
+        VDP_SetHIntPosition(hbla_pos);
 #if 0
         //Copy buffers
-        VDP_SetHIntPosition(hbla_pos);
         VDP_SeekVRAM(VRAM_SPRITES);
         VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
         VDP_SeekVRAM(VRAM_HSCROLL);
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
 #endif
+        draw_sprites();
         update_scroll();
         //Run palette cycle
         PCycle_SS();
@@ -389,15 +391,17 @@ void VBlank()
 
         //Copy palette
         sync_palettes();
+        VDP_SetHIntPosition(hbla_pos);
 #if 0
         //Copy buffers
-        VDP_SetHIntPosition(hbla_pos);
         VDP_SeekVRAM(VRAM_SPRITES);
         VDP_WriteVRAM((const uint8_t *)sprite_buffer, sizeof(sprite_buffer));
         VDP_SeekVRAM(VRAM_HSCROLL);
         VDP_WriteVRAM((const uint8_t *)hscroll_buffer, sizeof(hscroll_buffer));
 
 #endif
+
+        draw_sprites();
         update_scroll();
 
         //Update Sonic's art

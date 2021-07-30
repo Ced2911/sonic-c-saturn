@@ -57,7 +57,10 @@ void draw_sprites()
                     .x = sprite_x + (x << 3),
                     .y = sprite_y + (y << 3)};
 
-                color_bank.raw = sprite_pal << 5;
+                //color_bank.raw = sprite_pal << 5;
+
+                color_bank.type_1.data.pr = (sprite[2] >> 15) ? 3 : 2;
+                color_bank.type_1.data.dc = sprite_pal << 5;
 
                 vdp1_cmdt_normal_sprite_set(vdp1_spr);
                 vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
@@ -110,6 +113,21 @@ void init_vdp1()
         INT16_VEC2_INITIALIZER(SCREEN_WIDTH / 2,
                                SCREEN_HEIGHT / 2);
 */
+
+    const vdp1_env_t vdp1_env = {
+        .erase_color = COLOR_RGB1555_INITIALIZER(0, 0, 0, 0),
+        .erase_points[0] = {
+            0,
+            0},
+        .erase_points[1] = {/* Updated during runtime */
+                            0,
+                            /* Updated during runtime */
+                            0},
+        .bpp = VDP1_ENV_BPP_16,
+        .rotation = VDP1_ENV_ROTATION_0,
+        .color_mode = VDP1_ENV_COLOR_MODE_RGB_PALETTE,
+        .sprite_type = 0x01};
+    vdp1_env_set(&vdp1_env);
 
     static const int16_vec2_t local_coords = {.x = -128, .y = -128};
 
