@@ -144,13 +144,6 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     // Duplicate data in vdp1
     if (1 && vram_offset < VRAM_FG)
     {
-        // VDP2
-        uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
-        memcpy(cpd, data, len);
-
-        // VDP1
-        uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
-        memcpy(tex, data, len);
     }
     // FG
     else if (vram_offset >= VRAM_FG && vram_offset < VRAM_BG)
@@ -175,13 +168,6 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     // Duplicate data in vdp1
     else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
     {
-        // VDP2
-        uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
-        memcpy(cpd, data, len);
-
-        // VDP1
-        uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
-        memcpy(tex, data, len);
     }
 
     // Sprite tbl - unused
@@ -195,6 +181,15 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     {
         memcpy((void *)vdp_vram + vram_offset, data, len);
     }
+
+    
+    // VDP2
+    uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
+    memcpy(cpd, data, len);
+
+    // VDP1
+    uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
+    memcpy(tex, data, len);
     vram_offset += len;
 }
 

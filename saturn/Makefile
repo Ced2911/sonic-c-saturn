@@ -58,7 +58,7 @@ SH_LIBRARIES:=
 SH_CFLAGS+= -O2 -g -I. -I../src -I../src/Backend -I../src/Object  -save-temps=obj \
 	-Wno-unused-parameter -Wno-unused-variable -Wno-implicit-fallthrough -Wno-sequence-point \
 	-Wno-discarded-qualifiers -Wno-unused-function \
-	-DSCP_FIX_BUGS -DSCP_BIG_ENDIAN
+	-DSCP_FIX_BUGS -DSCP_BIG_ENDIAN -DSCP_JP -DSCP_REV01
 
 IP_VERSION:= V0.001
 IP_RELEASE_DATE:= 20180214
