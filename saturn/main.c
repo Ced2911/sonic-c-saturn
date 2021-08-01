@@ -98,14 +98,12 @@ void VDP_SetHScrollLocation(size_t loc)
     // Unused
 }
 
+#define VCELL_SCROLL VDP2_VRAM_ADDR(2, 0x02000)
 // @Todo
 void VDP_SetVScroll(int16_t scroll_a, int16_t scroll_b)
 {
-#if 1
-    // bug
-    // vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a << 16);
+    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG0, scroll_a << 16);
     vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, scroll_b << 16);
-#endif
 }
 
 // @Todo
@@ -146,7 +144,7 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     {
     }
     // FG
-    else if (vram_offset >= VRAM_FG && vram_offset < VRAM_BG)
+    else if (vram_offset >= VRAM_FG && vram_offset < (VRAM_FG + 0x1000))
     {
         for (size_t i = 0; i < len; i += 2)
         {
@@ -182,7 +180,6 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
         memcpy((void *)vdp_vram + vram_offset, data, len);
     }
 
-    
     // VDP2
     uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
     memcpy(cpd, data, len);

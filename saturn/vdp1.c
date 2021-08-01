@@ -76,43 +76,39 @@ void draw_sprites()
 
         uint8_t sprite_flip_y = (sprite[2] & 0x1000) != 0;
         uint8_t sprite_flip_x = (sprite[2] & 0x0800) != 0;
-
-        //Write sprite
-        for (uint8_t y = 0; y < (sprite_height + 1); y++)
+        uint8_t y = 0;
+        for (uint8_t x = 0; x < (sprite_width + 1); x++)
         {
-            for (uint8_t x = 0; x < (sprite_width + 1); x++)
+            uint8_t rel_x = sprite_flip_x ? (sprite_width)-x : x;
+            uint8_t rel_y = y;
+
+            uint32_t sp_offset = y + (x * (sprite_height + 1));
+
+            uint32_t tex_addr = (uint32_t)vdp1_vram_partitions.texture_base + ((sprite_tile + sp_offset) << 5);
+
+            int16_vec2_t xy = {
+                .x = sprite_x + (rel_x << 3),
+                .y = sprite_y + (rel_y << 3)};
+
+            // skip some sprites...
+            //if (sprite_x > 128)
             {
-                uint8_t rel_x = sprite_flip_x ? (sprite_width) - x : x;
-                uint8_t rel_y = sprite_flip_y ? (sprite_height) - y : y;
+                //color_bank.raw = sprite_pal << 5;
 
-                uint32_t sp_offset = y + (x * (sprite_height + 1));
+                color_bank.type_1.data.pr = (sprite[2] >> 15) ? 3 : 2;
+                color_bank.type_1.data.dc = sprite_pal << 5;
 
-                uint32_t tex_addr = (uint32_t)vdp1_vram_partitions.texture_base + ((sprite_tile + sp_offset) << 5);
+                vdp1_cmdt_normal_sprite_set(vdp1_spr);
+                vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
+                vdp1_cmdt_param_draw_mode_set(vdp1_spr, draw_mode);
+                vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
+                vdp1_cmdt_param_size_set(vdp1_spr, 8, 8 * (sprite_height + 1));
+                vdp1_cmdt_param_char_base_set(vdp1_spr, tex_addr);
+                vdp1_cmdt_param_horizontal_flip_set(vdp1_spr, sprite_flip_x);
+                vdp1_cmdt_param_vertical_flip_set(vdp1_spr, sprite_flip_y);
 
-                int16_vec2_t xy = {
-                    .x = sprite_x + (rel_x << 3),
-                    .y = sprite_y + (rel_y << 3)};
-
-                // skip some sprites...
-                //if (sprite_x > 128)
-                {
-                    //color_bank.raw = sprite_pal << 5;
-
-                    color_bank.type_1.data.pr = (sprite[2] >> 15) ? 3 : 2;
-                    color_bank.type_1.data.dc = sprite_pal << 5;
-
-                    vdp1_cmdt_normal_sprite_set(vdp1_spr);
-                    vdp1_cmdt_param_vertices_set(vdp1_spr, &xy);
-                    vdp1_cmdt_param_draw_mode_set(vdp1_spr, draw_mode);
-                    vdp1_cmdt_param_color_mode0_set(vdp1_spr, color_bank);
-                    vdp1_cmdt_param_size_set(vdp1_spr, 8, 8);
-                    vdp1_cmdt_param_char_base_set(vdp1_spr, tex_addr);
-                    vdp1_cmdt_param_horizontal_flip_set(vdp1_spr, sprite_flip_x);
-                    vdp1_cmdt_param_vertical_flip_set(vdp1_spr, sprite_flip_y);
-
-                    n_spr++;
-                    vdp1_spr++;
-                }
+                n_spr++;
+                vdp1_spr++;
             }
         }
     }

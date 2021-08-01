@@ -3,6 +3,7 @@
 
 #define BG_LINE_SCROLL VDP2_VRAM_ADDR(2, 0x00000)
 #define FG_LINE_SCROLL VDP2_VRAM_ADDR(2, 0x01000)
+#define VCELL_SCROLL VDP2_VRAM_ADDR(2, 0x02000)
 
 //=========================================================
 // Screen setup
@@ -35,10 +36,10 @@ vdp2_scrn_cell_format_t format[4] = {
         .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
         .sf_type = VDP2_SCRN_SF_TYPE_PRIORITY,
         .sf_mode = 1 /** per tile **/,
-        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
-        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
-        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
-        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(0, 0x18000),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
     },
     {
         .scroll_screen = VDP2_SCRN_NBG2,
@@ -71,91 +72,82 @@ vdp2_scrn_cell_format_t format[4] = {
 
 };
 
+static const vdp2_scrn_ls_format_t _ls_format_bg = {
+    .scroll_screen = VDP2_SCRN_NBG0,
+    .line_scroll_table = BG_LINE_SCROLL,
+    .interval = 0,
+    .enable = VDP2_SCRN_LS_HORZ};
+
+static const vdp2_scrn_ls_format_t _ls_format_fg = {
+    .scroll_screen = VDP2_SCRN_NBG1,
+    .line_scroll_table = FG_LINE_SCROLL,
+    .interval = 0,
+    .enable = VDP2_SCRN_LS_HORZ};
+
+const vdp2_scrn_vcs_format_t _vs_format_bg = {
+    .scroll_screen = VDP2_SCRN_NBG0,
+    .vcs_table = VCELL_SCROLL,
+};
+const vdp2_scrn_vcs_format_t _vs_format_fg = {
+    .scroll_screen = VDP2_SCRN_NBG1,
+    .vcs_table = VCELL_SCROLL,
+};
+
 //=========================================================
 // Tilemap
 //=========================================================
-void SetTileMap(const uint8_t *tilemap, size_t offset)
+
+// http://md.railgun.works/index.php?title=VDP#Patterns
+// https://segaretro.org/Sega_Mega_Drive/Planes
+
+static void _setTileMap(const uint8_t *tilemap, uint32_t *pages)
 {
-    int is_bg = ((offset >> 13) == 7);
-    uint32_t *pages = is_bg ? (uint32_t *)format[1].map_bases.plane_a : (uint32_t *)format[0].map_bases.plane_a;
-    pages += ((offset & 0x1FFF) >> 1);
+    const uint32_t screen_pal_adr = format[0].color_palette;
+    const uint32_t screen_cpd_adr = format[0].cp_table;
 
-    uint32_t screen_pal_adr = format[0].color_palette;
-    uint32_t screen_cpd_adr = format[0].cp_table;
+    const uint16_t v = *((uint16_t *)tilemap);
 
-    uint16_t v = *((uint16_t *)tilemap);
+    const uint16_t tile_idx = v & 0x7FF;
+    const uint8_t pal_idx = (v >> 13) & 0x3;
 
-    uint16_t tile_idx = v & 0x7FF;
-    uint8_t pal_idx = (v >> 13) & 0x3;
+    const uint32_t pal_adr = (uint32_t)(screen_pal_adr) + (pal_idx * 32 * 2);
+    const uint32_t cpd_adr = (uint32_t)(screen_cpd_adr) + (tile_idx << 5);
 
-    uint32_t pal_adr = (uint32_t)(screen_pal_adr) + (pal_idx * 32 * 2);
-    uint32_t cpd_adr = (uint32_t)(screen_cpd_adr) + (tile_idx << 5);
+    const uint8_t y_flip = (v & 0x1000) != 0;
+    const uint8_t x_flip = (v & 0x0800) != 0;
 
-    uint8_t y_flip = (v & 0x1000) != 0;
-    uint8_t x_flip = (v & 0x0800) != 0;
+    const uint8_t prio = (v >> 15) ? 1 : 0;
 
-    uint8_t prio = (v >> 15) ? 1 : 0;
-    if (prio)
-    {
-        // cpd_adr += 0x10000;
-    }
-
-    uint32_t pnd = VDP2_SCRN_PND_CONFIG_8(1, cpd_adr, pal_adr, y_flip, x_flip, prio, 0);
+    const uint32_t pnd = VDP2_SCRN_PND_CONFIG_8(1, cpd_adr, pal_adr, y_flip, x_flip, prio, 0);
 
     *pages = pnd;
+    // duplicate the tile a 2nd time
+    pages[1 << 11] = pnd;
+}
+
+void SetTileMap(const uint8_t *tilemap, size_t offset)
+{
+    const int is_bg = ((offset >> 13) == 7);
+    uint32_t *pages = is_bg ? (uint32_t *)format[1].map_bases.plane_a : (uint32_t *)format[0].map_bases.plane_a;
+    pages += ((offset & 0x1FFF) >> 1);
+    _setTileMap(tilemap, pages);
 }
 
 //
 void CopyTilemap(const uint8_t *tilemap, size_t offset, size_t width, size_t height)
 {
-    int is_bg = ((offset >> 13) == 7);
-
-    uint32_t page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(&format[0]);
-    uint32_t page_height = VDP2_SCRN_CALCULATE_PAGE_HEIGHT(&format[0]);
-    uint32_t page_size = VDP2_SCRN_CALCULATE_PAGE_SIZE(&format[0]);
+    const uint32_t page_width = VDP2_SCRN_CALCULATE_PAGE_WIDTH(&format[0]);
+    const int is_bg = ((offset >> 13) == 7);
 
     uint32_t *pages = is_bg ? (uint32_t *)format[1].map_bases.plane_a : (uint32_t *)format[0].map_bases.plane_a;
-    //uint16_t *pages = (uint16_t *)format[0].map_bases.plane_a;
-
-    // if (!is_bg) return;
-
     pages += ((offset & 0x1FFF) >> 1);
 
-    uint32_t page_x;
-    uint32_t page_y;
-
-    uint32_t screen_pal_adr = format[0].color_palette;
-    uint32_t screen_cpd_adr = format[0].cp_table;
-
-    // http://md.railgun.works/index.php?title=VDP#Patterns
-    for (page_y = 0; page_y < height; page_y++)
+    for (uint32_t page_y = 0; page_y < height; page_y++)
     {
-        for (page_x = 0; page_x < width; page_x++)
+        for (uint32_t page_x = 0; page_x < width; page_x++)
         {
-            // https://segaretro.org/Sega_Mega_Drive/Planes
-
-            uint16_t v = *((uint16_t *)tilemap);
             uint16_t page_idx = page_x + (page_width * page_y);
-
-            uint16_t tile_idx = v & 0x7FF;
-            uint8_t pal_idx = (v >> 13) & 0x3;
-
-            uint32_t pal_adr = (uint32_t)(screen_pal_adr) + (pal_idx * 32 * 2);
-            uint32_t cpd_adr = (uint32_t)(screen_cpd_adr) + (tile_idx << 5);
-
-            uint8_t y_flip = (v & 0x1000) != 0;
-            uint8_t x_flip = (v & 0x0800) != 0;
-
-            uint8_t prio = (v >> 15) ? 1 : 0;
-            if (prio)
-            {
-                // cpd_adr += 0x10000;
-            }
-
-            uint32_t pnd = VDP2_SCRN_PND_CONFIG_8(1, cpd_adr, pal_adr, y_flip, x_flip, prio, 0);
-
-            pages[page_idx] = pnd;
-
+            _setTileMap(tilemap, &pages[page_idx]);
             tilemap += 2;
         }
     }
@@ -214,19 +206,6 @@ void sync_palettes()
 //=========================================================
 // Scroll
 //=========================================================
-
-static vdp2_scrn_ls_format_t _ls_format_bg = {
-    .scroll_screen = VDP2_SCRN_NBG0,
-    .line_scroll_table = BG_LINE_SCROLL,
-    .interval = 0,
-    .enable = VDP2_SCRN_LS_HORZ};
-
-static vdp2_scrn_ls_format_t _ls_format_fg = {
-    .scroll_screen = VDP2_SCRN_NBG1,
-    .line_scroll_table = FG_LINE_SCROLL,
-    .interval = 0,
-    .enable = VDP2_SCRN_LS_HORZ};
-
 void update_scroll()
 {
     int16_t *scroll = &hscroll_buffer[0][0];
@@ -315,6 +294,8 @@ void init_vdp2()
 
     vdp2_scrn_ls_set(&_ls_format_bg);
     vdp2_scrn_ls_set(&_ls_format_fg);
+    // vdp2_scrn_vcs_set(&_vs_format_bg);
+    // vdp2_scrn_vcs_set(&_vs_format_fg);
 }
 
 void vblank_out_handler(void *work __unused)
