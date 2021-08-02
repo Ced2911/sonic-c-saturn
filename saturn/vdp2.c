@@ -36,10 +36,10 @@ vdp2_scrn_cell_format_t format[4] = {
         .color_palette = (uint32_t)VDP2_CRAM_MODE_1_OFFSET(0, 0, 0),
         .sf_type = VDP2_SCRN_SF_TYPE_PRIORITY,
         .sf_mode = 1 /** per tile **/,
-        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
-        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
-        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
-        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x10000),
+        .map_bases.plane_a = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_b = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_c = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
+        .map_bases.plane_d = (uint32_t)VDP2_VRAM_ADDR(1, 0x00000),
     },
     {
         .scroll_screen = VDP2_SCRN_NBG2,
@@ -225,16 +225,16 @@ void init_vdp2()
 {
     vdp2_vram_cycp_t vram_cycp;
 
-    vram_cycp.pt[0].t0 = VDP2_VRAM_CYCP_PNDR_NBG0;
-    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_PNDR_NBG0;
-    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
-    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
-    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
-    vram_cycp.pt[0].t5 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
-    vram_cycp.pt[0].t6 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
-    vram_cycp.pt[0].t7 = VDP2_VRAM_CYCP_CHPNDR_NBG2;
+    vram_cycp.pt[0].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG0;
+    vram_cycp.pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1;
+    vram_cycp.pt[0].t2 = VDP2_VRAM_CYCP_PNDR_NBG0;
+    vram_cycp.pt[0].t3 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t4 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t5 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t6 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[0].t7 = VDP2_VRAM_CYCP_NO_ACCESS;
 
-    vram_cycp.pt[1].t0 = VDP2_VRAM_CYCP_NO_ACCESS;
+    vram_cycp.pt[1].t0 = VDP2_VRAM_CYCP_PNDR_NBG1;
     vram_cycp.pt[1].t1 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[1].t2 = VDP2_VRAM_CYCP_NO_ACCESS;
     vram_cycp.pt[1].t3 = VDP2_VRAM_CYCP_NO_ACCESS;

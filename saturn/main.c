@@ -138,13 +138,11 @@ void VDP_SeekVRAM(size_t offset)
 void VDP_WriteVRAM(const uint8_t *data, size_t len)
 {
     uint32_t screen_cpd_adr = format[0].cp_table;
-    // Pattern data - no transformation
-    // Duplicate data in vdp1
-    if (1 && vram_offset < VRAM_FG)
-    {
-    }
+    //if (1 && vram_offset < VRAM_FG)
+    //{
+    //}
     // FG
-    else if (vram_offset >= VRAM_FG && vram_offset < (VRAM_FG + 0x1000))
+    if (vram_offset >= VRAM_FG && vram_offset < (VRAM_FG + 0x1000))
     {
         for (size_t i = 0; i < len; i += 2)
         {
@@ -164,9 +162,9 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     // SONIC
     // Pattern data - no transformation
     // Duplicate data in vdp1
-    else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
-    {
-    }
+    //else if (vram_offset >= VRAM_SONIC && vram_offset < VRAM_SPRITES)
+    //{
+    //}
 
     // Sprite tbl - unused
     else if (vram_offset >= VRAM_SPRITES && vram_offset < VRAM_HSCROLL)
@@ -179,14 +177,21 @@ void VDP_WriteVRAM(const uint8_t *data, size_t len)
     {
         memcpy((void *)vdp_vram + vram_offset, data, len);
     }
+    else
+    {
 
-    // VDP2
-    uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
-    memcpy(cpd, data, len);
+        // Pattern data - no transformation
+        // Duplicate data in vdp1
 
-    // VDP1
-    uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
-    memcpy(tex, data, len);
+        // VDP2
+        uint8_t *cpd = (uint8_t *)screen_cpd_adr + (vram_offset);
+        memcpy(cpd, data, len);
+
+        // VDP1
+        uint8_t *tex = (uint8_t *)vdp1_vram_partitions.texture_base + vram_offset;
+        memcpy(tex, data, len);
+    }
+
     vram_offset += len;
 }
 
